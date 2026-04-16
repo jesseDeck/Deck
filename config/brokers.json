@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Charles Schwab",
+    "dashboard_url": "https://www.schwab.com/client-home"
+  },
+  {
+    "name": "Fidelity Investments",
+    "dashboard_url": "https://digital.fidelity.com/prgw/digital/login/full-page"
+  },
+  {
+    "name": "Vanguard",
+    "dashboard_url": "https://investor.vanguard.com/my-account-log-on"
+  },
+  {
+    "name": "E*TRADE",
+    "dashboard_url": "https://us.etrade.com/e/t/user/login"
+  },
+  {
+    "name": "Interactive Brokers",
+    "dashboard_url": "https://www.interactivebrokers.com/sso/Login"
+  }
+]
