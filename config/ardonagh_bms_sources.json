@@ -1,0 +1,37 @@
+{
+  "systems": [
+    {
+      "slug": "acturis",
+      "name": "Acturis",
+      "website_url": "https://www.acturis.com/",
+      "credential_env": {
+        "username": "ACTURIS_USERNAME",
+        "password": "ACTURIS_PASSWORD"
+      },
+      "relevance_to_ardonagh": "Ardonagh publicly disclosed migration of advisory sites onto Acturis, and third-party implementation notes list Acturis as one of Ardonagh's key PAS environments.",
+      "api_gap": "Acturis has partner-specific integrations, but no broadly available self-serve API for generic broker-side policy extraction workflows."
+    },
+    {
+      "slug": "open_gi_transactor",
+      "name": "Open GI Transactor",
+      "website_url": "https://www.opengi.co.uk/",
+      "credential_env": {
+        "username": "OPENGI_USERNAME",
+        "password": "OPENGI_PASSWORD"
+      },
+      "relevance_to_ardonagh": "Ardonagh implementation references include reconciliation and migration workstreams against Open GI PAS environments.",
+      "api_gap": "Open GI markets integration capabilities but does not expose a public developer portal with self-service API contracts suitable for direct tenant onboarding."
+    },
+    {
+      "slug": "rdt_landscape",
+      "name": "RDT Landscape (Legacy / GEO)",
+      "website_url": "https://www.rdt.co.uk/",
+      "credential_env": {
+        "username": "RDT_LANDSCAPE_USERNAME",
+        "password": "RDT_LANDSCAPE_PASSWORD"
+      },
+      "relevance_to_ardonagh": "Midas Underwriting (Ardonagh group) was publicly documented migrating from RDT Landscape (legacy GEO system) to Open GI, making it relevant for historical book extraction.",
+      "api_gap": "Legacy deployment model and migration-focused usage indicate no practical modern, self-serve API path for retrospective policy extraction."
+    }
+  ]
+}
