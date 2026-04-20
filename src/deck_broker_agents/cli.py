@@ -1,4 +1,4 @@
-"""CLI entrypoint for provisioning and running Deck broker agents."""
+"""CLI entrypoint for provisioning and running Deck extraction agents."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import json
 import os
 from typing import Any
 
+from .athena_agents import AthenaHealthAgentManager
 from .deck_client import DeckClient
 from .policy_agents import PolicyAgentManager
 
@@ -22,7 +23,7 @@ def _parse_source_overrides(raw_values: list[str] | None) -> dict[str, str]:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Deck broker policy extraction toolkit")
+    parser = argparse.ArgumentParser(description="Deck extraction agent toolkit")
     parser.add_argument(
         "--registry-path",
         default=".deck/broker_agents.json",
@@ -73,6 +74,45 @@ def _build_parser() -> argparse.ArgumentParser:
     get_run.add_argument("--task-run-id", required=True)
     get_run.add_argument("--include-storage", action="store_true")
 
+    bootstrap_athena = sub.add_parser(
+        "bootstrap-athena",
+        help="Create source/agent/task records for Athenahealth medical record extraction",
+    )
+    bootstrap_athena.add_argument(
+        "--source-url",
+        help="Optional override for the Athenahealth login URL.",
+    )
+
+    create_athena_cred = sub.add_parser(
+        "create-athena-credential",
+        help="Store Athenahealth username/password in Deck vault",
+    )
+    create_athena_cred.add_argument("--external-id", required=True)
+    create_athena_cred.add_argument("--username", required=True)
+    create_athena_cred.add_argument("--password", required=True)
+    create_athena_cred.add_argument(
+        "--source-field",
+        action="append",
+        help="Optional source field in form key=value (for tenant/practice specific login fields).",
+    )
+
+    run_athena = sub.add_parser("run-athena", help="Run Athenahealth medical record extraction task")
+    run_athena.add_argument("--credential-id", required=True)
+    run_athena.add_argument("--patient-reference", required=True)
+    run_athena.add_argument("--date-from")
+    run_athena.add_argument("--date-to")
+    run_athena.add_argument(
+        "--section",
+        action="append",
+        dest="include_sections",
+        help="Optional section to include. Repeat for multiple sections.",
+    )
+    run_athena.add_argument("--session-id")
+    run_athena.add_argument("--idempotency-key")
+    run_athena.add_argument("--wait", action="store_true", help="Poll run until terminal state.")
+    run_athena.add_argument("--poll-seconds", type=int, default=5)
+    run_athena.add_argument("--timeout-seconds", type=int, default=600)
+
     return parser
 
 
@@ -83,6 +123,32 @@ def _build_manager(registry_path: str) -> PolicyAgentManager:
     return PolicyAgentManager(client=client, registry_path=registry_path)
 
 
+def _build_athena_manager(registry_path: str) -> AthenaHealthAgentManager:
+    api_key = os.getenv("DECK_API_KEY", "")
+    base_url = os.getenv("DECK_BASE_URL", "https://api.deck.co/v2")
+    client = DeckClient(api_key=api_key, base_url=base_url)
+    athena_registry_path = registry_path
+    if registry_path == ".deck/broker_agents.json":
+        athena_registry_path = ".deck/athena_agent.json"
+    return AthenaHealthAgentManager(client=client, registry_path=athena_registry_path)
+
+
+def _parse_kv_pairs(raw_values: list[str] | None, option_name: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for item in raw_values or []:
+        if "=" not in item:
+            raise ValueError(f"Invalid {option_name} '{item}'. Expected format key=value")
+        key, value = item.split("=", maxsplit=1)
+        normalized_key = key.strip()
+        normalized_value = value.strip()
+        if not normalized_key:
+            raise ValueError(f"Invalid {option_name} '{item}'. Key cannot be empty")
+        if not normalized_value:
+            raise ValueError(f"Invalid {option_name} '{item}'. Value cannot be empty")
+        values[normalized_key] = normalized_value
+    return values
+
+
 def _print(payload: Any) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True))
 
@@ -91,6 +157,7 @@ def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
     manager = _build_manager(args.registry_path)
+    athena_manager = _build_athena_manager(args.registry_path)
 
     if args.command == "bootstrap":
         systems = [part.strip().lower() for part in args.systems.split(",") if part.strip()]
@@ -145,6 +212,43 @@ def main() -> int:
             task_run_id=args.task_run_id,
             include_storage=args.include_storage,
         )
+        _print(run)
+        return 0
+
+    if args.command == "bootstrap-athena":
+        record = athena_manager.bootstrap(source_url=args.source_url)
+        _print(vars(record))
+        return 0
+
+    if args.command == "create-athena-credential":
+        source_fields = _parse_kv_pairs(args.source_field, "--source-field")
+        credential = athena_manager.create_user_credential(
+            external_id=args.external_id,
+            username=args.username,
+            password=args.password,
+            source_fields=source_fields or None,
+        )
+        _print(credential)
+        return 0
+
+    if args.command == "run-athena":
+        run = athena_manager.run_medical_record_extraction(
+            credential_id=args.credential_id,
+            patient_reference=args.patient_reference,
+            date_from=args.date_from,
+            date_to=args.date_to,
+            include_sections=args.include_sections,
+            session_id=args.session_id,
+            idempotency_key=args.idempotency_key,
+        )
+        if args.wait:
+            terminal = athena_manager.wait_for_terminal_status(
+                run["id"],
+                poll_seconds=args.poll_seconds,
+                timeout_seconds=args.timeout_seconds,
+            )
+            _print(terminal)
+            return 0
         _print(run)
         return 0
 

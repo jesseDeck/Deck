@@ -129,7 +129,14 @@ class DeckClient:
         external_id: str,
         username: str,
         password: str,
+        source_fields: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        auth_credentials: dict[str, Any] = {
+            "username": username,
+            "password": password,
+        }
+        if source_fields:
+            auth_credentials["source_fields"] = source_fields
         return self._request(
             "POST",
             "/credentials",
@@ -137,10 +144,7 @@ class DeckClient:
                 "source_id": source_id,
                 "external_id": external_id,
                 "auth_method": "username_password",
-                "auth_credentials": {
-                    "username": username,
-                    "password": password,
-                },
+                "auth_credentials": auth_credentials,
             },
         )
 

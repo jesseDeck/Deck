@@ -1,19 +1,21 @@
-# Deck Broker Policy Agents
+# Deck Extraction Agents
 
-This repository provides a Python toolkit that provisions and runs [Deck](https://docs.deck.co) computer-use agents to extract **client policy data** from leading UK/London broker management systems:
+This repository provides a Python toolkit that provisions and runs [Deck](https://docs.deck.co) computer-use agents for two extraction workflows:
 
-1. **Acturis**
-2. **Open GI**
-3. **SSP**
+1. **Broker policy extraction** from leading UK/London broker management systems:
+   - Acturis
+   - Open GI
+   - SSP
+2. **Athenahealth chart extraction** for patient medical records
 
 ## What this project builds
 
 Using Deck v2 APIs, the code can:
 
-- create a **source** for each broker system
-- create an **agent** for each broker system
-- create a policy extraction **task** with normalized JSON output schema
-- enable **storage + document extraction** for policy files (schedule, certificate, wording, endorsements)
+- create a **source** for each system (broker platforms and Athenahealth)
+- create an **agent** for each extraction workflow
+- create extraction **tasks** with normalized JSON output schemas
+- enable **storage + document extraction** for policy and chart documents
 - create per-user **credentials** in Deck Vault
 - run task executions and poll until terminal status
 - handle MFA/security prompts via interaction submission
@@ -45,7 +47,9 @@ export DECK_BASE_URL="https://api.deck.co/v2"  # optional override
 
 ## CLI usage
 
-### 1) Bootstrap all three systems
+### Broker workflow
+
+#### 1) Bootstrap all three broker systems
 
 ```bash
 python -m deck_broker_agents bootstrap
@@ -62,7 +66,7 @@ python -m deck_broker_agents bootstrap \
   --source-override ssp=https://broker-login.example.com/ssp
 ```
 
-### 2) Store user credential
+#### 2) Store user credential
 
 ```bash
 python -m deck_broker_agents create-credential \
@@ -72,7 +76,7 @@ python -m deck_broker_agents create-credential \
   --password "super-secret"
 ```
 
-### 3) Run policy extraction
+#### 3) Run policy extraction
 
 ```bash
 python -m deck_broker_agents run \
@@ -84,7 +88,7 @@ python -m deck_broker_agents run \
   --wait
 ```
 
-### 4) Submit interaction input (MFA/security question)
+#### 4) Submit interaction input (MFA/security question)
 
 ```bash
 python -m deck_broker_agents submit-interaction \
@@ -92,7 +96,7 @@ python -m deck_broker_agents submit-interaction \
   --input-json '{"code":"123456"}'
 ```
 
-### 5) Retrieve task run details
+#### 5) Retrieve task run details
 
 ```bash
 python -m deck_broker_agents get-run \
@@ -100,9 +104,53 @@ python -m deck_broker_agents get-run \
   --include-storage
 ```
 
-## Normalized extraction schema
+### Athenahealth workflow
 
-Each task run is configured to return a broker-agnostic policy shape:
+#### 1) Bootstrap Athenahealth source/agent/task
+
+```bash
+python -m deck_broker_agents bootstrap-athena
+```
+
+This writes Deck resource IDs to `.deck/athena_agent.json`.
+
+You can override the source URL if your organization uses a tenant-specific Athenahealth entry point:
+
+```bash
+python -m deck_broker_agents bootstrap-athena \
+  --source-url https://athenanet.athenahealth.com/
+```
+
+#### 2) Store Athenahealth credential
+
+```bash
+python -m deck_broker_agents create-athena-credential \
+  --external-id patient_user_123 \
+  --username clinician.user@example.com \
+  --password "super-secret" \
+  --source-field department_id=77
+```
+
+Use `--source-field key=value` repeatedly for any required tenant/practice fields.
+
+#### 3) Run Athenahealth medical record extraction
+
+```bash
+python -m deck_broker_agents run-athena \
+  --credential-id cred_abc123 \
+  --patient-reference MRN-12345 \
+  --date-from 2025-01-01 \
+  --date-to 2025-12-31 \
+  --section labs \
+  --section medications \
+  --wait
+```
+
+## Normalized extraction schemas
+
+### Broker policy output
+
+Each broker task run is configured to return a broker-agnostic policy shape:
 
 - `client_reference`
 - `broker_system`
@@ -119,9 +167,30 @@ Each task run is configured to return a broker-agnostic policy shape:
   - `broker_reference`
   - `documents[]`
 
+### Athenahealth output
+
+Athenahealth task runs return a normalized chart shape:
+
+- `source_system`
+- `patient`
+  - `patient_reference`
+  - `full_name`
+  - `date_of_birth`
+  - `sex`
+- `records`
+  - `encounters[]`
+  - `problems[]`
+  - `medications[]`
+  - `allergies[]`
+  - `labs[]`
+  - `immunizations[]`
+  - `vitals[]`
+  - `documents[]`
+
 ## Security and compliance notes
 
 - Only run this against systems and client records where you have explicit authorization.
+- For Athenahealth workflows, ensure HIPAA and BAA obligations are satisfied before handling PHI.
 - Credentials are stored in Deck Vault through the `credentials` endpoint.
 - Do not hardcode secrets in source code or commit API keys.
 - Rotate any secrets that were exposed in plaintext anywhere outside your secure secret manager.
