@@ -1,6 +1,6 @@
 # Deck Broker Policy Agents
 
-This repository provides a Python toolkit that provisions and runs [Deck](https://docs.deck.co) computer-use agents to extract **client policy data** from leading UK/London broker management systems:
+This repository provides a Python toolkit that provisions and runs [Deck](https://docs.deck.co) computer-use agents to extract **client policy data** from leading UK/London broker management systems, plus a Verizon billing workflow to switch the default payment card:
 
 1. **Acturis**
 2. **Open GI**
@@ -17,6 +17,7 @@ Using Deck v2 APIs, the code can:
 - create per-user **credentials** in Deck Vault
 - run task executions and poll until terminal status
 - handle MFA/security prompts via interaction submission
+- switch default payment card on Verizon (from cards already on file)
 
 The implementation follows patterns described in:
 
@@ -100,6 +101,54 @@ python -m deck_broker_agents get-run \
   --include-storage
 ```
 
+## Verizon payment-method switch workflow
+
+The Verizon workflow creates a dedicated source/agent/task that signs in to Verizon, navigates to payment settings, and switches the default card to a target card already saved on the account.
+
+### 1) Bootstrap Verizon resources
+
+```bash
+python -m deck_broker_agents bootstrap-verizon
+```
+
+This writes Deck resource IDs to `.deck/verizon_payment_agent.json`.
+
+### 2) Store Verizon credential in Deck Vault
+
+```bash
+python -m deck_broker_agents create-verizon-credential \
+  --external-id verizon_user_123 \
+  --username your-verizon-login@example.com \
+  --password "super-secret"
+```
+
+### 3) Run payment method switch
+
+```bash
+python -m deck_broker_agents run-verizon-switch \
+  --credential-id cred_abc123 \
+  --target-card-last4 4242 \
+  --target-card-label "Personal Visa" \
+  --confirm-switch \
+  --wait
+```
+
+Optional flags for disambiguation and replay safety:
+
+- `--billing-zip 10001`
+- `--account-nickname "Family Plan"`
+- `--idempotency-key verizon-switch-2026-04-20-001`
+
+### 4) Submit interaction input (MFA/security question)
+
+Use the same interaction command as other tasks:
+
+```bash
+python -m deck_broker_agents submit-interaction \
+  --task-run-id trun_abc123 \
+  --input-json '{"code":"123456"}'
+```
+
 ## Normalized extraction schema
 
 Each task run is configured to return a broker-agnostic policy shape:
@@ -125,6 +174,7 @@ Each task run is configured to return a broker-agnostic policy shape:
 - Credentials are stored in Deck Vault through the `credentials` endpoint.
 - Do not hardcode secrets in source code or commit API keys.
 - Rotate any secrets that were exposed in plaintext anywhere outside your secure secret manager.
+- Use the Verizon payment switch workflow only on accounts where you are authorized to modify billing settings.
 
 ## Development
 
