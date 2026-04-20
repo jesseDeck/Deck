@@ -11,6 +11,7 @@ class FakeDeckClient:
         self.created_agents = []
         self.created_tasks = []
         self.runs = []
+        self.credentials = []
         self._counter = 0
 
     def _id(self, prefix: str) -> str:
@@ -36,6 +37,11 @@ class FakeDeckClient:
         run = {"id": self._id("trun"), **kwargs}
         self.runs.append(run)
         return run
+
+    def create_credential(self, **kwargs):
+        credential = {"id": self._id("cred"), **kwargs}
+        self.credentials.append(credential)
+        return credential
 
 
 def test_bootstrap_many_creates_three_defaults(tmp_path: Path) -> None:
