@@ -6,6 +6,8 @@ This repository provides a Python toolkit that provisions and runs [Deck](https:
 2. **Open GI**
 3. **SSP**
 
+It also includes a dedicated **YouTube viewing history agent** that can extract the authenticated user's watch history for the last week (or a custom date range).
+
 ## What this project builds
 
 Using Deck v2 APIs, the code can:
@@ -44,6 +46,52 @@ export DECK_BASE_URL="https://api.deck.co/v2"  # optional override
 ```
 
 ## CLI usage
+
+### YouTube viewing history workflow
+
+1) Bootstrap YouTube source + agent + task:
+
+```bash
+python -m deck_broker_agents youtube-bootstrap
+```
+
+This writes Deck resource IDs to `.deck/youtube_history_agent.json`.
+
+2) Store your YouTube credential in Deck Vault:
+
+```bash
+python -m deck_broker_agents youtube-create-credential \
+  --external-id me \
+  --username your-google-email@example.com \
+  --password "your-password"
+```
+
+3) Run viewing history extraction for the last 7 days:
+
+```bash
+python -m deck_broker_agents youtube-run \
+  --credential-id cred_abc123 \
+  --wait
+```
+
+Optional date-window override:
+
+```bash
+python -m deck_broker_agents youtube-run \
+  --credential-id cred_abc123 \
+  --start-date 2026-04-14 \
+  --end-date 2026-04-20 \
+  --max-items 300 \
+  --wait
+```
+
+If YouTube/Google prompts for MFA or additional verification, submit that input using:
+
+```bash
+python -m deck_broker_agents submit-interaction \
+  --task-run-id trun_abc123 \
+  --input-json '{"code":"123456"}'
+```
 
 ### 1) Bootstrap all three systems
 

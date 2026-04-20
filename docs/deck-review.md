@@ -10,6 +10,10 @@ This implementation was based on these Deck docs pages:
 - https://docs.deck.co/api/using-the-api.md
 - https://docs.deck.co/guides/interactions.md
 - https://docs.deck.co/guides/storage.md
+- https://docs.deck.co/api-reference/agents/create-an-agent
+- https://docs.deck.co/api-reference/sources/create-a-source
+- https://docs.deck.co/api-reference/tasks/create-a-task
+- https://docs.deck.co/api-reference/task-runs/create-a-task-run
 
 ## API and behavior assumptions applied
 
@@ -45,3 +49,12 @@ This implementation was based on these Deck docs pages:
 ## Prompting choices from task guidance
 
 Task prompt intentionally focuses on the goal ("retrieve normalized policy records and documents") rather than UI click-by-click instructions, matching Deck guidance to keep prompts source-agnostic.
+
+## YouTube viewing history agent notes
+
+The YouTube workflow in this repository uses the same source → agent → task flow from the API reference and is configured to:
+
+1. Target `https://www.youtube.com/` as the source URL.
+2. Accept `start_date`, `end_date`, and `max_items` as task input.
+3. Return a normalized watch-history payload (`entries[]`) with title, channel, URL, duration text, and watch timestamp when visible.
+4. Support interactive auth/MFA by using the existing `submit-interaction` command when a run status is `interaction_required`.
