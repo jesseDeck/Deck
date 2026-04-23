@@ -1,6 +1,13 @@
-# Deck Broker Policy Agents
+# Deck Broker Policy + Retail Pricing Agents
 
-This repository provides a Python toolkit that provisions and runs [Deck](https://docs.deck.co) computer-use agents to extract **client policy data** from leading UK/London broker management systems:
+This repository provides a Python toolkit that provisions and runs [Deck](https://docs.deck.co) computer-use agents for:
+
+1. **Client policy extraction** from UK/London broker systems
+2. **Retail product pricing extraction** from e-commerce catalogs (including Ferguson faucets/sinks)
+
+## Included policy connectors
+
+The policy workflow supports these broker management systems:
 
 1. **Acturis**
 2. **Open GI**
@@ -10,11 +17,11 @@ This repository provides a Python toolkit that provisions and runs [Deck](https:
 
 Using Deck v2 APIs, the code can:
 
-- create a **source** for each broker system
-- create an **agent** for each broker system
-- create a policy extraction **task** with normalized JSON output schema
+- create a **source** for each target system/catalog
+- create an **agent** for each use case
+- create extraction **tasks** with normalized JSON output schema
 - enable **storage + document extraction** for policy files (schedule, certificate, wording, endorsements)
-- create per-user **credentials** in Deck Vault
+- create per-user **credentials** in Deck Vault (`username_password` and `none`)
 - run task executions and poll until terminal status
 - handle MFA/security prompts via interaction submission
 
@@ -45,7 +52,7 @@ export DECK_BASE_URL="https://api.deck.co/v2"  # optional override
 
 ## CLI usage
 
-### 1) Bootstrap all three systems
+### 1) Bootstrap all three policy systems
 
 ```bash
 python -m deck_broker_agents bootstrap
@@ -99,6 +106,69 @@ python -m deck_broker_agents get-run \
   --task-run-id trun_abc123 \
   --include-storage
 ```
+
+## Ferguson pricing agent
+
+This project also includes a Deck task scaffold for extracting faucet and sink prices from Ferguson.
+
+### 1) Bootstrap pricing catalog
+
+```bash
+python -m deck_broker_agents pricing-bootstrap --catalogs ferguson
+```
+
+This writes Deck resource IDs to `.deck/pricing_agents.json`.
+
+### 2) (Optional) Create a no-auth credential link
+
+For public catalog extraction, Deck supports `auth_method=none`. This can still be useful to link a user/external ID.
+
+```bash
+python -m deck_broker_agents pricing-create-credential \
+  --catalog ferguson \
+  --external-id buyer_123
+```
+
+### 3) Run pricing extraction for faucets and sinks
+
+If no categories are specified, the task defaults to `faucets` and `sinks`.
+
+```bash
+python -m deck_broker_agents pricing-run \
+  --catalog ferguson \
+  --search-term kitchen \
+  --search-term matte-black \
+  --max-products-per-category 15 \
+  --wait
+```
+
+You can also pass a credential ID if your catalog flow requires authentication:
+
+```bash
+python -m deck_broker_agents pricing-run \
+  --catalog ferguson \
+  --credential-id cred_abc123 \
+  --category faucets \
+  --category sinks \
+  --wait
+```
+
+### 4) Pricing output schema
+
+Each pricing run is configured to return:
+
+- `catalog`
+- `queried_categories[]`
+- `products[]` with:
+  - `category`
+  - `name`
+  - `brand`
+  - `sku`
+  - `price`
+  - `currency`
+  - `availability`
+  - `product_url`
+- `retrieved_at`
 
 ## Normalized extraction schema
 
