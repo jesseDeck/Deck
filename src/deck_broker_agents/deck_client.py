@@ -161,6 +161,7 @@ class DeckClient:
         *,
         task_id: str,
         credential_id: str | None,
+        source_id: str | None = None,
         task_input: dict[str, Any],
         session_id: str | None = None,
         idempotency_key: str | None = None,
@@ -168,6 +169,8 @@ class DeckClient:
         payload: dict[str, Any] = {"input": task_input}
         if credential_id:
             payload["credential_id"] = credential_id
+        if source_id:
+            payload["source_id"] = source_id
         if session_id:
             payload["session_id"] = session_id
         return self._request(

@@ -137,6 +137,7 @@ class PricingAgentManager:
         return self.client.run_task(
             task_id=registry[key].task_id,
             credential_id=credential_id,
+            source_id=registry[key].source_id if not credential_id else None,
             task_input=task_input,
             session_id=session_id,
             idempotency_key=idempotency_key,

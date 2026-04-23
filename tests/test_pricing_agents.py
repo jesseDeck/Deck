@@ -75,6 +75,8 @@ def test_pricing_run_defaults_to_faucets_and_sinks(tmp_path: Path) -> None:
     )
 
     assert run["task_input"]["categories"] == ["faucets", "sinks"]
+    assert run["source_id"].startswith("src_")
+    assert run["credential_id"] is None
     assert run["task_input"]["search_terms"] == ["kitchen"]
     assert run["task_input"]["include_out_of_stock"] is True
 
