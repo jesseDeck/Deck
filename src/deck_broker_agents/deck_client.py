@@ -144,16 +144,30 @@ class DeckClient:
             },
         )
 
+    def create_no_auth_credential(self, *, source_id: str, external_id: str) -> dict[str, Any]:
+        return self._request(
+            "POST",
+            "/credentials",
+            json_body={
+                "source_id": source_id,
+                "external_id": external_id,
+                "auth_method": "none",
+                "auth_credentials": {},
+            },
+        )
+
     def run_task(
         self,
         *,
         task_id: str,
-        credential_id: str,
+        credential_id: str | None,
         task_input: dict[str, Any],
         session_id: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {"credential_id": credential_id, "input": task_input}
+        payload: dict[str, Any] = {"input": task_input}
+        if credential_id:
+            payload["credential_id"] = credential_id
         if session_id:
             payload["session_id"] = session_id
         return self._request(
