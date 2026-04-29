@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from deck_broker_agents.grocery_agents import GroceryProfileAgentManager
+from deck_broker_agents.grocery_agents import GroceryAgentManager
 
 
 class FakeDeckClient:
@@ -40,7 +40,7 @@ class FakeDeckClient:
 
 def test_bootstrap_many_creates_three_defaults(tmp_path: Path) -> None:
     client = FakeDeckClient()
-    manager = GroceryProfileAgentManager(client, registry_path=tmp_path / "registry.json")
+    manager = GroceryAgentManager(client, registry_path=tmp_path / "registry.json")
 
     registry = manager.bootstrap_many()
 
@@ -52,20 +52,20 @@ def test_bootstrap_many_creates_three_defaults(tmp_path: Path) -> None:
 
 def test_run_profile_extraction_builds_expected_input(tmp_path: Path) -> None:
     client = FakeDeckClient()
-    manager = GroceryProfileAgentManager(client, registry_path=tmp_path / "registry.json")
+    manager = GroceryAgentManager(client, registry_path=tmp_path / "registry.json")
     manager.bootstrap_many(["loblaw"])
 
     run = manager.run_profile_extraction(
         grocery_chain="loblaw",
         credential_id="cred_1",
         customer_reference="CUST-100",
-        include_loyalty=True,
         include_order_history=False,
-        lookback_days=30,
+        max_orders=30,
+        include_saved_addresses=False,
     )
 
     assert run["credential_id"] == "cred_1"
     assert run["task_input"]["customer_reference"] == "CUST-100"
-    assert run["task_input"]["include_loyalty"] is True
     assert run["task_input"]["include_order_history"] is False
-    assert run["task_input"]["lookback_days"] == 30
+    assert run["task_input"]["max_orders"] == 30
+    assert run["task_input"]["include_saved_addresses"] is False

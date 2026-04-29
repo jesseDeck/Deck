@@ -142,9 +142,9 @@ python -m deck_broker_agents grocery-create-credential \
 python -m deck_broker_agents grocery-run \
   --chain loblaw \
   --credential-id cred_abc123 \
-  --profile-reference customer@example.com \
-  --include-loyalty \
+  --customer-reference customer@example.com \
   --include-order-history \
+  --max-orders 10 \
   --wait
 ```
 
@@ -169,25 +169,29 @@ Each task run is configured to return a broker-agnostic policy shape:
 
 Canadian grocery profile tasks return a normalized shape:
 
-- `chain`
-- `profile_reference`
-- `customer`:
-  - `full_name`
+- `customer_reference`
+- `grocery_chain`
+- `profile`:
+  - `first_name`
+  - `last_name`
   - `email`
   - `phone`
-  - `addresses[]`
-- `loyalty`:
-  - `program_name`
-  - `member_id`
-  - `tier`
+  - `loyalty_id`
+  - `account_status`
+  - `preferred_store_id`
+  - `preferred_store_name`
   - `points_balance`
-- `order_history[]`:
+  - `points_program_name`
+  - `marketing_email_opt_in`
+  - `marketing_sms_opt_in`
+  - `addresses[]`
+- `recent_orders[]`:
   - `order_id`
   - `order_date`
-  - `total_amount`
+  - `order_total`
   - `currency`
+  - `item_count`
   - `store_name`
-  - `items[]` (name, quantity, unit_price)
 - `retrieved_at`
 
 ## Security and compliance notes

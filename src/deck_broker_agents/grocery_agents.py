@@ -10,9 +10,9 @@ from typing import Any
 
 from .deck_client import DeckClient
 from .models import (
-    CANADIAN_GROCERY_CHAINS,
-    grocery_profile_input_schema,
-    grocery_profile_output_schema,
+    GROCERY_CHAINS,
+    grocery_task_input_schema,
+    grocery_task_output_schema,
     grocery_storage_extraction_schema,
 )
 
@@ -61,11 +61,11 @@ class GroceryAgentManager:
         source_url: str | None = None,
     ) -> GroceryAgentRecord:
         key = grocery_chain.lower().strip()
-        if key not in CANADIAN_GROCERY_CHAINS:
-            allowed = ", ".join(sorted(CANADIAN_GROCERY_CHAINS))
+        if key not in GROCERY_CHAINS:
+            allowed = ", ".join(sorted(GROCERY_CHAINS))
             raise ValueError(f"Unknown grocery_chain '{grocery_chain}'. Expected one of: {allowed}")
 
-        chain = CANADIAN_GROCERY_CHAINS[key]
+        chain = GROCERY_CHAINS[key]
         source = self.client.create_source(
             name=f"{chain.display_name} Customer Portal",
             website_url=source_url or chain.default_source_url,
@@ -81,8 +81,8 @@ class GroceryAgentManager:
             agent_id=agent["id"],
             name="Extract Customer Profile Data",
             prompt=self._profile_prompt(chain.display_name),
-            input_schema=grocery_profile_input_schema(),
-            output_schema=grocery_profile_output_schema(),
+            input_schema=grocery_task_input_schema(),
+            output_schema=grocery_task_output_schema(),
             storage={
                 "enabled": True,
                 "extraction": True,
@@ -104,7 +104,7 @@ class GroceryAgentManager:
         *,
         source_url_overrides: dict[str, str] | None = None,
     ) -> dict[str, GroceryAgentRecord]:
-        chains = grocery_chains or sorted(CANADIAN_GROCERY_CHAINS.keys())
+        chains = grocery_chains or sorted(GROCERY_CHAINS.keys())
         source_url_overrides = source_url_overrides or {}
 
         registry = self.load_registry()
@@ -145,10 +145,10 @@ class GroceryAgentManager:
         grocery_chain: str,
         credential_id: str,
         customer_reference: str,
-        include_loyalty: bool = True,
-        include_addresses: bool = True,
-        include_payment_methods: bool = False,
-        include_marketing_preferences: bool = True,
+        include_order_history: bool = False,
+        max_orders: int | None = None,
+        include_saved_addresses: bool = True,
+        as_of_date: str | None = None,
         session_id: str | None = None,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
@@ -159,11 +159,13 @@ class GroceryAgentManager:
 
         task_input: dict[str, Any] = {
             "customer_reference": customer_reference,
-            "include_loyalty": include_loyalty,
-            "include_addresses": include_addresses,
-            "include_payment_methods": include_payment_methods,
-            "include_marketing_preferences": include_marketing_preferences,
+            "include_order_history": include_order_history,
+            "include_saved_addresses": include_saved_addresses,
         }
+        if max_orders is not None:
+            task_input["max_orders"] = max_orders
+        if as_of_date:
+            task_input["as_of_date"] = as_of_date
         return self.client.run_task(
             task_id=registry[key].task_id,
             credential_id=credential_id,

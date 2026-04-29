@@ -8,7 +8,7 @@ import os
 from typing import Any
 
 from .deck_client import DeckClient
-from .grocery_agents import GroceryProfileAgentManager
+from .grocery_agents import GroceryAgentManager
 from .policy_agents import PolicyAgentManager
 
 
@@ -101,9 +101,11 @@ def _build_parser() -> argparse.ArgumentParser:
     grocery_run = sub.add_parser("grocery-run", help="Run grocery profile extraction task")
     grocery_run.add_argument("--chain", required=True)
     grocery_run.add_argument("--credential-id", required=True)
-    grocery_run.add_argument("--profile-reference", required=True)
+    grocery_run.add_argument("--customer-reference", required=True)
     grocery_run.add_argument("--include-order-history", action="store_true")
-    grocery_run.add_argument("--order-history-limit", type=int)
+    grocery_run.add_argument("--max-orders", type=int)
+    grocery_run.add_argument("--include-saved-addresses", action="store_true")
+    grocery_run.add_argument("--as-of-date")
     grocery_run.add_argument("--session-id")
     grocery_run.add_argument("--idempotency-key")
     grocery_run.add_argument("--wait", action="store_true", help="Poll run until terminal state.")
@@ -132,9 +134,9 @@ def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
     manager = _build_manager(args.registry_path)
-    grocery_manager = GroceryProfileAgentManager(
+    grocery_manager = GroceryAgentManager(
         client=manager.client,
-        registry_path=args.registry_path,
+        registry_path=args.registry_path.replace("broker_agents.json", "grocery_agents.json"),
     )
 
     if args.command == "bootstrap":
@@ -202,7 +204,7 @@ def main() -> int:
 
     if args.command == "grocery-create-credential":
         credential = grocery_manager.create_user_credential(
-            chain=args.chain,
+            grocery_chain=args.chain,
             external_id=args.external_id,
             username=args.username,
             password=args.password,
@@ -212,11 +214,13 @@ def main() -> int:
 
     if args.command == "grocery-run":
         run = grocery_manager.run_profile_extraction(
-            chain=args.chain,
+            grocery_chain=args.chain,
             credential_id=args.credential_id,
-            profile_reference=args.profile_reference,
+            customer_reference=args.customer_reference,
             include_order_history=args.include_order_history,
-            order_history_limit=args.order_history_limit,
+            max_orders=args.max_orders,
+            include_saved_addresses=args.include_saved_addresses,
+            as_of_date=args.as_of_date,
             session_id=args.session_id,
             idempotency_key=args.idempotency_key,
         )
