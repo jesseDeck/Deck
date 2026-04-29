@@ -1,10 +1,15 @@
-# Deck Broker Policy Agents
+# Deck Data Extraction Agents
 
-This repository provides a Python toolkit that provisions and runs [Deck](https://docs.deck.co) computer-use agents to extract **client policy data** from leading UK/London broker management systems:
+This repository provides a Python toolkit that provisions and runs [Deck](https://docs.deck.co) computer-use agents for two extraction domains:
 
-1. **Acturis**
-2. **Open GI**
-3. **SSP**
+1. **UK/London broker policy data**
+   - Acturis
+   - Open GI
+   - SSP
+2. **Canadian grocery profile data**
+   - Loblaw
+   - Sobeys
+   - Metro
 
 ## What this project builds
 
@@ -44,6 +49,8 @@ export DECK_BASE_URL="https://api.deck.co/v2"  # optional override
 ```
 
 ## CLI usage
+
+### UK broker policy workflow
 
 ### 1) Bootstrap all three systems
 
@@ -100,6 +107,47 @@ python -m deck_broker_agents get-run \
   --include-storage
 ```
 
+### Canadian grocery profile workflow
+
+#### 1) Bootstrap top grocery chains
+
+```bash
+python -m deck_broker_agents grocery-bootstrap
+```
+
+This writes Deck resource IDs to `.deck/grocery_agents.json`.
+
+You can override source URLs (useful for account-specific sign-in pages):
+
+```bash
+python -m deck_broker_agents grocery-bootstrap \
+  --source-override loblaw=https://www.pcoptimum.ca/ \
+  --source-override sobeys=https://www.sceneplus.ca/ \
+  --source-override metro=https://www.metro.ca/
+```
+
+#### 2) Store user credential
+
+```bash
+python -m deck_broker_agents grocery-create-credential \
+  --chain loblaw \
+  --external-id customer_123 \
+  --username customer@example.com \
+  --password "super-secret"
+```
+
+#### 3) Run profile extraction
+
+```bash
+python -m deck_broker_agents grocery-run \
+  --chain loblaw \
+  --credential-id cred_abc123 \
+  --profile-reference customer@example.com \
+  --include-loyalty \
+  --include-order-history \
+  --wait
+```
+
 ## Normalized extraction schema
 
 Each task run is configured to return a broker-agnostic policy shape:
@@ -118,6 +166,29 @@ Each task run is configured to return a broker-agnostic policy shape:
   - `currency`
   - `broker_reference`
   - `documents[]`
+
+Canadian grocery profile tasks return a normalized shape:
+
+- `chain`
+- `profile_reference`
+- `customer`:
+  - `full_name`
+  - `email`
+  - `phone`
+  - `addresses[]`
+- `loyalty`:
+  - `program_name`
+  - `member_id`
+  - `tier`
+  - `points_balance`
+- `order_history[]`:
+  - `order_id`
+  - `order_date`
+  - `total_amount`
+  - `currency`
+  - `store_name`
+  - `items[]` (name, quantity, unit_price)
+- `retrieved_at`
 
 ## Security and compliance notes
 
