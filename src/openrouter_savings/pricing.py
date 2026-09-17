@@ -30,42 +30,52 @@ def cheapest_snapshot_at_or_before(
     *,
     prompt_tokens: int = 0,
     completion_tokens: int = 0,
+    acceptable_models: list[str] | None = None,
+    any_model_acceptable: bool = False,
 ) -> tuple[PriceSnapshot | None, bool]:
-    """Pick the provider that would have been cheapest for this exact usage.
+    """Pick the (model, provider) that would have been cheapest for this usage.
 
-    For each provider we know a price for, use its most recent snapshot at or
-    before ``at_or_before``; if no such snapshot exists for that provider (all
-    of its observations are later than the usage), fall back to that
-    provider's earliest known snapshot instead, since it's the closest
-    estimate we have. Providers are then ranked by what this specific
+    By default only ``model``'s own providers are considered (OpenRouter
+    routing across providers of the same model). Pass ``acceptable_models``
+    to also consider specific substitute models -- ``model`` itself is always
+    implicitly included -- or ``any_model_acceptable=True`` to consider every
+    model any snapshot has pricing for (full auto-route).
+
+    For each (model, provider) pair we know a price for, use its most recent
+    snapshot at or before ``at_or_before``; if no such snapshot exists (all of
+    its observations are later than the usage), fall back to its earliest
+    known snapshot instead, since it's the closest estimate we have.
+    Candidates are then ranked by what this specific
     ``prompt_tokens``/``completion_tokens`` mix would actually have cost at
     their snapshot price, not a generic per-token average, since prompt-heavy
-    and completion-heavy workloads can favor different cheapest providers.
+    and completion-heavy workloads can favor different cheapest options.
 
     Returns ``(cheapest, is_estimated)`` where ``is_estimated`` is True when
     the chosen snapshot didn't actually precede the usage timestamp (i.e. we
     only had pricing from after the fact to go on).
     """
-    by_provider: dict[str, list[PriceSnapshot]] = {}
+    wanted_models = None if any_model_acceptable else {model, *(acceptable_models or [])}
+
+    by_key: dict[tuple[str, str], list[PriceSnapshot]] = {}
     for snap in snapshots:
-        if snap.model != model:
+        if wanted_models is not None and snap.model not in wanted_models:
             continue
-        by_provider.setdefault(snap.provider, []).append(snap)
+        by_key.setdefault((snap.model, snap.provider), []).append(snap)
 
     best: PriceSnapshot | None = None
     best_is_estimated = False
     best_cost = float("inf")
-    for provider_snaps in by_provider.values():
-        provider_snaps.sort(key=lambda s: s.timestamp)
+    for candidate_snaps in by_key.values():
+        candidate_snaps.sort(key=lambda s: s.timestamp)
         chosen = None
         estimated = False
-        for snap in provider_snaps:
+        for snap in candidate_snaps:
             if snap.timestamp <= at_or_before:
                 chosen = snap  # keep advancing to the latest one still <= cutoff
             else:
                 break
         if chosen is None:
-            chosen = provider_snaps[0]
+            chosen = candidate_snaps[0]
             estimated = True
 
         candidate_cost = prompt_tokens * chosen.prompt_price + completion_tokens * chosen.completion_price

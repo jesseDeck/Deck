@@ -68,6 +68,22 @@ def _first_present(data: dict[str, Any], keys: list[str]) -> Any:
     return None
 
 
+def parse_catalog_pricing(raw_model: dict[str, Any]) -> tuple[float | None, float | None]:
+    """Extract (prompt_price, completion_price) from one entry of ``list_models()``.
+
+    This is the model's single top-level listed price, not a per-provider
+    breakdown (use ``list_endpoints`` for that) -- good enough as a broad,
+    cheap-to-fetch baseline across the whole catalog, e.g. for "any available
+    model" comparisons where querying every model's endpoints individually
+    would mean hundreds of API calls.
+    """
+    pricing = raw_model.get("pricing") or {}
+    return (
+        _to_float(_first_present(pricing, _PRICE_KEYS["prompt"])),
+        _to_float(_first_present(pricing, _PRICE_KEYS["completion"])),
+    )
+
+
 def parse_endpoint(raw: dict[str, Any]) -> ProviderEndpoint:
     pricing = raw.get("pricing") or {}
     provider = _first_present(raw, _PROVIDER_NAME_KEYS) or "unknown"

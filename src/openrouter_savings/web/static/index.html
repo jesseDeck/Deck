@@ -10,16 +10,91 @@
   <header>
     <h1>OpenRouter Savings &amp; Downtime Calculator</h1>
     <p>
-      Log what you actually pay providers directly, tell it which models to track, and it
-      compares that spend against the cheapest OpenRouter-served provider for the same model.
+      Pick the models you use and roughly how much (below), or log exact usage entries, and it
+      compares that spend against the cheapest OpenRouter-served provider — or, if you say other
+      models are acceptable substitutes, the cheapest model+provider you were willing to use.
       OpenRouter's public API only reports <em>current</em> pricing and uptime — this tool
       builds price/uptime history itself by polling going forward (via "Snapshot now" or the
-      server's background poller). You can also backfill older prices from a CSV.
+      server's background poller). You can also backfill older prices/outages from a CSV.
     </p>
   </header>
   <main>
     <section class="card">
-      <h2>Savings summary</h2>
+      <h2>Model usage profiles</h2>
+      <p class="muted">
+        Pick a model you use from OpenRouter's catalog, describe roughly how long and how much you've
+        used it, and choose which other models would have been acceptable to auto-route to instead
+        (or allow any available model). This projects your usage month by month and compares it against
+        the cheapest option you were willing to use.
+      </p>
+      <form id="profile-form">
+        <div class="profile-form-grid">
+          <div class="field-label-wrap">
+            <span class="field-label">Model you use</span>
+            <div class="model-picker" id="profile-model-picker"></div>
+          </div>
+          <label>Label (optional)
+            <input name="label" placeholder="Main coding assistant" />
+          </label>
+          <label>Used since
+            <input name="used_since" type="date" required />
+          </label>
+          <label>Used until (blank = ongoing)
+            <input name="used_until" type="date" />
+          </label>
+          <label>Monthly prompt tokens
+            <input name="monthly_prompt_tokens" type="number" min="0" value="0" />
+          </label>
+          <label>Monthly completion tokens
+            <input name="monthly_completion_tokens" type="number" min="0" value="0" />
+          </label>
+          <label>Monthly cost paid ($, optional)
+            <input name="monthly_cost" type="number" step="0.01" min="0" placeholder="auto from unit prices" />
+          </label>
+          <label>Unit prompt price ($/token, optional)
+            <input name="unit_prompt_price" type="number" step="0.0000001" min="0" />
+          </label>
+          <label>Unit completion price ($/token, optional)
+            <input name="unit_completion_price" type="number" step="0.0000001" min="0" />
+          </label>
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="profile-any-model" />
+          Any available model is acceptable (full auto-route)
+        </label>
+        <div id="profile-acceptable-wrap">
+          <div class="field-label-wrap">
+            <span class="field-label">Acceptable substitute models (optional, in addition to the model above)</span>
+            <div class="model-picker" id="profile-acceptable-picker"></div>
+          </div>
+        </div>
+
+        <button type="submit">Add profile</button>
+      </form>
+
+      <table id="profiles-table">
+        <thead>
+          <tr><th>Model</th><th>Label</th><th>Window</th><th>Monthly tokens (prompt/completion)</th><th>Acceptable</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Profile-based savings</h2>
+      <p class="muted">Projected from the model usage profiles above, month by month.</p>
+      <div class="stat-row" id="profile-stat-tiles"></div>
+      <table id="profile-entries-table">
+        <thead>
+          <tr><th>Model</th><th>Month</th><th>Actual</th><th>Best acceptable</th><th>Routed to</th><th>Savings</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Savings summary (manual usage log)</h2>
       <div class="stat-row" id="stat-tiles"></div>
       <div class="muted" id="missing-price-note" style="margin-top:8px;"></div>
     </section>
@@ -37,7 +112,7 @@
     </section>
 
     <section class="card">
-      <h2>Add usage</h2>
+      <h2>Add usage (exact log entries)</h2>
       <form class="inline" id="usage-form">
         <label>Model (author/slug)
           <input name="model" placeholder="openai/gpt-4o" required />

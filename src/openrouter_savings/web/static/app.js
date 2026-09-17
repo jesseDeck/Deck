@@ -204,8 +204,231 @@ async function refreshUptime() {
     .join("");
 }
 
+function createModelPicker(container, { multiple = false, placeholder = "Search OpenRouter models…" } = {}) {
+  container.innerHTML = `
+    <div class="model-picker-chips"></div>
+    <input type="text" class="model-picker-input" placeholder="${placeholder}" autocomplete="off" />
+    <div class="model-picker-results"></div>
+  `;
+  const input = container.querySelector(".model-picker-input");
+  const resultsEl = container.querySelector(".model-picker-results");
+  const chipsEl = container.querySelector(".model-picker-chips");
+
+  let selected = []; // [{id, name}]
+  let debounceTimer = null;
+
+  // Keep the input focused while clicking a result, so the dropdown doesn't
+  // close (via the input's blur handler below) before the click registers.
+  resultsEl.addEventListener("mousedown", (evt) => evt.preventDefault());
+
+  function renderChips() {
+    if (!multiple) return;
+    chipsEl.innerHTML = selected
+      .map(
+        (m, i) =>
+          `<span class="model-chip">${m.id}<button type="button" class="chip-remove" data-i="${i}">&times;</button></span>`
+      )
+      .join("");
+    chipsEl.querySelectorAll(".chip-remove").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selected.splice(Number(btn.dataset.i), 1);
+        renderChips();
+      });
+    });
+  }
+
+  function selectModel(model) {
+    if (multiple) {
+      if (!selected.some((m) => m.id === model.id)) selected.push(model);
+      input.value = "";
+      renderChips();
+    } else {
+      selected = [model];
+      input.value = model.id;
+    }
+    resultsEl.style.display = "none";
+  }
+
+  async function search(query) {
+    try {
+      const results = await api("GET", `/api/models?q=${encodeURIComponent(query)}`);
+      if (results.length === 0) {
+        resultsEl.innerHTML = '<div class="model-picker-empty">No matches</div>';
+      } else {
+        resultsEl.innerHTML = results
+          .map(
+            (m) =>
+              `<div class="model-picker-item" data-id="${m.id}">${m.id}${
+                m.name ? ` <span class="muted">${m.name}</span>` : ""
+              }</div>`
+          )
+          .join("");
+        resultsEl.querySelectorAll(".model-picker-item").forEach((el) => {
+          el.addEventListener("click", (evt) => {
+            const match = results.find((r) => r.id === el.dataset.id);
+            selectModel(match || { id: el.dataset.id, name: "" });
+          });
+        });
+      }
+      resultsEl.style.display = "block";
+    } catch (err) {
+      resultsEl.innerHTML = `<div class="model-picker-empty">Search failed: ${err.message}</div>`;
+      resultsEl.style.display = "block";
+    }
+  }
+
+  input.addEventListener("input", () => {
+    clearTimeout(debounceTimer);
+    if (!multiple) selected = [];
+    const query = input.value.trim();
+    debounceTimer = setTimeout(() => search(query), 250);
+  });
+  input.addEventListener("focus", () => search(input.value.trim()));
+  input.addEventListener("blur", () => {
+    setTimeout(() => (resultsEl.style.display = "none"), 150);
+  });
+
+  return {
+    getSelectedIds: () => selected.map((m) => m.id),
+    getSingleId: () => (selected[0] ? selected[0].id : ""),
+    reset: () => {
+      selected = [];
+      input.value = "";
+      renderChips();
+    },
+  };
+}
+
+const profileModelPicker = createModelPicker($("#profile-model-picker"), { multiple: false });
+const profileAcceptablePicker = createModelPicker($("#profile-acceptable-picker"), {
+  multiple: true,
+  placeholder: "Add acceptable substitute models…",
+});
+
+$("#profile-any-model").addEventListener("change", (evt) => {
+  $("#profile-acceptable-wrap").style.display = evt.target.checked ? "none" : "block";
+});
+
+async function refreshProfiles() {
+  const profiles = await api("GET", "/api/profiles");
+  const tbody = $("#profiles-table tbody");
+  tbody.innerHTML = profiles
+    .map((p) => {
+      const windowLabel = `${p.used_since} → ${p.used_until || "ongoing"}`;
+      const acceptable = p.any_model_acceptable
+        ? "Any available model"
+        : p.acceptable_models.length
+        ? `+ ${p.acceptable_models.length} substitute${p.acceptable_models.length === 1 ? "" : "s"}`
+        : "Same model only";
+      return `<tr>
+        <td>${p.model}</td>
+        <td>${p.label || ""}</td>
+        <td>${windowLabel}</td>
+        <td>${Number(p.monthly_prompt_tokens).toLocaleString()} / ${Number(
+        p.monthly_completion_tokens
+      ).toLocaleString()}</td>
+        <td>${acceptable}</td>
+        <td><button class="icon-btn" data-id="${p.id}" title="Delete">&times;</button></td>
+      </tr>`;
+    })
+    .join("");
+  tbody.querySelectorAll("button[data-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await api("DELETE", `/api/profiles/${btn.dataset.id}`);
+      await refreshProfiles();
+      await refreshProfileReport();
+    });
+  });
+}
+
+async function refreshProfileReport() {
+  const report = await api("GET", "/api/profiles/report");
+  const tiles = [
+    { label: "Actual (projected)", value: fmtMoney(report.total_actual) },
+    { label: "Best acceptable model/provider", value: fmtMoney(report.total_best_openrouter) },
+    { label: "Estimated savings", value: fmtMoney(report.total_savings), good: report.total_savings > 0 },
+    { label: "Savings %", value: fmtPct(report.savings_pct), good: report.savings_pct > 0 },
+  ];
+  $("#profile-stat-tiles").innerHTML = tiles
+    .map(
+      (t) => `<div class="stat-tile"><div class="label">${t.label}</div>
+        <div class="value ${t.good ? "good" : ""}">${t.value}</div></div>`
+    )
+    .join("");
+
+  const tbody = $("#profile-entries-table tbody");
+  tbody.innerHTML = report.entries
+    .slice()
+    .sort((a, b) => (a.timestamp < b.timestamp ? -1 : 1))
+    .map((e) => {
+      const routedTo = e.best_openrouter_model
+        ? `${e.best_openrouter_model} (${e.best_openrouter_provider})${
+            e.routed_to_different_model ? ' <span class="badge">switched</span>' : ""
+          }`
+        : "—";
+      return `<tr>
+        <td>${e.model}</td>
+        <td>${e.timestamp.slice(0, 7)}</td>
+        <td>${fmtMoney(e.actual_cost)}</td>
+        <td>${fmtMoney(e.best_openrouter_cost)}</td>
+        <td>${routedTo}</td>
+        <td>${e.savings !== null ? fmtMoney(e.savings) : "—"}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+$("#profile-form").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const form = evt.target;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const model = profileModelPicker.getSingleId();
+  if (!model) {
+    alert('Pick a model from the search results in "Model you use".');
+    return;
+  }
+  const anyModel = $("#profile-any-model").checked;
+  const payload = {
+    model,
+    label: data.label.trim(),
+    used_since: data.used_since,
+    used_until: data.used_until || null,
+    monthly_prompt_tokens: Number(data.monthly_prompt_tokens || 0),
+    monthly_completion_tokens: Number(data.monthly_completion_tokens || 0),
+    monthly_cost: data.monthly_cost ? Number(data.monthly_cost) : null,
+    unit_prompt_price: data.unit_prompt_price ? Number(data.unit_prompt_price) : null,
+    unit_completion_price: data.unit_completion_price ? Number(data.unit_completion_price) : null,
+    acceptable_models: anyModel ? [] : profileAcceptablePicker.getSelectedIds(),
+    any_model_acceptable: anyModel,
+  };
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Fetching pricing…";
+  try {
+    await api("POST", "/api/profiles", payload);
+    form.reset();
+    profileModelPicker.reset();
+    profileAcceptablePicker.reset();
+    $("#profile-any-model").checked = false;
+    $("#profile-acceptable-wrap").style.display = "block";
+    // Adding a profile also tracks its models and fetches pricing for them on the
+    // backend (see _add_profile), so refresh everything, not just the profile views.
+    await refreshAll();
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Add profile";
+  }
+});
+
 async function refreshAll() {
-  await Promise.all([refreshReport(), refreshUsage(), refreshTracked(), refreshUptime()]);
+  await Promise.all([
+    refreshReport(),
+    refreshUsage(),
+    refreshTracked(),
+    refreshUptime(),
+    refreshProfiles(),
+    refreshProfileReport(),
+  ]);
 }
 
 $("#usage-form").addEventListener("submit", async (evt) => {

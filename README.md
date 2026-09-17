@@ -196,10 +196,20 @@ web app for figuring out how much you could save by routing through
 [OpenRouter](https://openrouter.ai) instead of calling model providers directly,
 and for tracking each provider's uptime over time.
 
-You log what you actually paid a provider directly (model, provider, tokens,
-cost) and tell it which models to track. It compares your real spend against
-the cheapest OpenRouter-served provider for that same model, and separately
-tracks per-provider uptime.
+There are two ways to describe your usage:
+
+- **Model usage profiles** (the quickest way in): pick a model from OpenRouter's
+  live catalog via search, say roughly how long and how much you've used it per
+  month, and choose which other models would have been acceptable to auto-route
+  to instead (specific substitutes, or "any available model" for full
+  auto-route). This projects your usage month by month and compares it against
+  the cheapest model+provider you were willing to use -- not just the cheapest
+  provider of the same model.
+- **Exact usage log entries**: log precisely what you paid a provider directly
+  (model, provider, tokens, cost, timestamp) for finer-grained history.
+
+Either way, it compares your real spend against the cheapest OpenRouter-served
+option, and separately tracks per-provider uptime.
 
 **Data limitation to know up front:** OpenRouter's public API only reports
 *current* pricing and uptime -- there's no public API for historical
@@ -231,12 +241,21 @@ python -m openrouter_savings serve
 
 Then open <http://127.0.0.1:8787>. From there you can:
 
-- Add usage entries (model, provider you actually used, tokens, cost)
+- Add a model usage profile: search OpenRouter's catalog for a model you use,
+  describe your usage window and monthly volume, and pick acceptable
+  substitute models (or "any available model"). Adding one immediately fetches
+  pricing for it -- no separate step needed.
+- Add exact usage entries (model, provider you actually used, tokens, cost)
 - Track models so their price/uptime get polled ("Snapshot now", or pass
   `--poll-interval-minutes` to `serve` to poll automatically in the background)
 - See total savings, a per-model/provider breakdown, a spend-over-time chart,
   and per-provider uptime/estimated downtime
 - Backfill historical prices or discrete outage windows by pasting a CSV
+
+Model usage profiles report which model+provider it would have routed each
+month to (shown as "switched" when that differs from the model you actually
+used), so cross-model routing decisions stay visible rather than a single
+opaque total.
 
 All data is stored locally as JSON under `.openrouter_savings/` (override with
 `--data-dir`). Nothing is sent anywhere except to OpenRouter's public,
@@ -247,6 +266,7 @@ unauthenticated catalog API.
 ```bash
 python -m openrouter_savings snapshot                    # poll tracked models once
 python -m openrouter_savings report                      # print the savings report as JSON
+python -m openrouter_savings profiles-report              # print the model-usage-profiles savings report as JSON
 python -m openrouter_savings uptime                      # print the uptime/downtime summary as JSON
 python -m openrouter_savings import-price-history prices.csv
 python -m openrouter_savings import-downtime-history outages.csv

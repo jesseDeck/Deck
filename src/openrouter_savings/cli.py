@@ -10,6 +10,7 @@ from typing import Any
 
 from .csv_import import CsvImportError, parse_downtime_incidents_csv, parse_price_history_csv
 from .openrouter_client import OpenRouterClient
+from .profiles import profiles_to_usage_entries
 from .savings import compute_savings
 from .server import serve
 from .snapshot_job import take_snapshot
@@ -52,6 +53,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     sub.add_parser("uptime", help="Print the per-provider uptime/downtime summary as JSON")
+
+    profiles_report_cmd = sub.add_parser(
+        "profiles-report", help="Print the savings report for model usage profiles as JSON"
+    )
+    profiles_report_cmd.add_argument("--no-live-fallback", action="store_true")
 
     import_cmd = sub.add_parser("import-price-history", help="Backfill historical prices from a CSV file")
     import_cmd.add_argument("csv_path")
@@ -96,6 +102,13 @@ def main() -> int:
     if args.command == "uptime":
         summaries = summarize_uptime(store.uptime_snapshots.all(), store.downtime_incidents.all())
         _print([s.to_dict() for s in summaries])
+        return 0
+
+    if args.command == "profiles-report":
+        live_client = None if args.no_live_fallback else client
+        entries = profiles_to_usage_entries(store.model_profiles.all())
+        report = compute_savings(entries, store.price_snapshots.all(), live_client=live_client)
+        _print(report.to_dict())
         return 0
 
     if args.command == "import-price-history":

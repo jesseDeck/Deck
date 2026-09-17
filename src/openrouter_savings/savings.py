@@ -16,6 +16,7 @@ class EntryResult:
     actual: float
     best_openrouter_cost: float | None
     best_openrouter_provider: str | None
+    best_openrouter_model: str | None  # may differ from entry.model when routed to a substitute
     savings: float | None  # actual - best_openrouter_cost; None if no price data at all
     is_estimated: bool  # True if we had no price observed at/before this entry's timestamp
 
@@ -54,6 +55,10 @@ class SavingsReport:
                         round(r.best_openrouter_cost, 6) if r.best_openrouter_cost is not None else None
                     ),
                     "best_openrouter_provider": r.best_openrouter_provider,
+                    "best_openrouter_model": r.best_openrouter_model,
+                    "routed_to_different_model": (
+                        r.best_openrouter_model is not None and r.best_openrouter_model != r.entry.model
+                    ),
                     "savings": round(r.savings, 6) if r.savings is not None else None,
                     "is_estimated": r.is_estimated,
                 }
@@ -93,16 +98,23 @@ def compute_savings(
             entry.timestamp,
             prompt_tokens=entry.prompt_tokens,
             completion_tokens=entry.completion_tokens,
+            acceptable_models=entry.acceptable_models,
+            any_model_acceptable=entry.any_model_acceptable,
         )
 
         best_cost: float | None = None
         best_provider: str | None = None
+        best_model: str | None = None
         if best_snapshot is not None:
             best_cost = entry.prompt_tokens * best_snapshot.prompt_price + (
                 entry.completion_tokens * best_snapshot.completion_price
             )
             best_provider = best_snapshot.provider
+            best_model = best_snapshot.model
         elif live_client is not None:
+            # Live fallback only ever checks entry.model itself, not its substitutes, to
+            # keep this bounded to one API call per distinct model rather than one per
+            # (model, acceptable substitute) combination.
             if entry.model not in live_cache:
                 live_cache[entry.model] = _try_live_cheapest(live_client, entry.model)
             live = live_cache[entry.model]
@@ -110,6 +122,7 @@ def compute_savings(
                 provider, prompt_price, completion_price = live
                 best_cost = entry.prompt_tokens * prompt_price + entry.completion_tokens * completion_price
                 best_provider = provider
+                best_model = entry.model
                 is_estimated = True
 
         savings = (paid - best_cost) if best_cost is not None else None
@@ -120,6 +133,7 @@ def compute_savings(
                 actual=paid,
                 best_openrouter_cost=best_cost,
                 best_openrouter_provider=best_provider,
+                best_openrouter_model=best_model,
                 savings=savings,
                 is_estimated=is_estimated,
             )

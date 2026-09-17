@@ -92,3 +92,53 @@ def test_cheapest_snapshot_returns_none_when_model_unknown() -> None:
     )
     assert chosen is None
     assert estimated is False
+
+
+def test_cheapest_snapshot_considers_acceptable_substitute_models() -> None:
+    snapshots = [
+        PriceSnapshot(model="expensive/model", provider="p1", prompt_price=0.0001, completion_price=0.0001,
+                      timestamp="2026-01-01T00:00:00+00:00"),
+        PriceSnapshot(model="cheap/model", provider="p2", prompt_price=0.000001, completion_price=0.000001,
+                      timestamp="2026-01-01T00:00:00+00:00"),
+        PriceSnapshot(model="unrelated/model", provider="p3", prompt_price=0.0000001, completion_price=0.0000001,
+                      timestamp="2026-01-01T00:00:00+00:00"),
+    ]
+
+    chosen, _ = cheapest_snapshot_at_or_before(
+        snapshots, "expensive/model", "2026-06-01T00:00:00+00:00",
+        prompt_tokens=100, completion_tokens=100, acceptable_models=["cheap/model"],
+    )
+
+    assert chosen.model == "cheap/model"  # cheaper substitute wins over the model actually used
+    # "unrelated/model" is cheaper still, but wasn't listed as acceptable, so it's excluded.
+
+
+def test_cheapest_snapshot_any_model_acceptable_considers_everything() -> None:
+    snapshots = [
+        PriceSnapshot(model="expensive/model", provider="p1", prompt_price=0.0001, completion_price=0.0001,
+                      timestamp="2026-01-01T00:00:00+00:00"),
+        PriceSnapshot(model="unrelated/model", provider="p3", prompt_price=0.0000001, completion_price=0.0000001,
+                      timestamp="2026-01-01T00:00:00+00:00"),
+    ]
+
+    chosen, _ = cheapest_snapshot_at_or_before(
+        snapshots, "expensive/model", "2026-06-01T00:00:00+00:00",
+        prompt_tokens=100, completion_tokens=100, any_model_acceptable=True,
+    )
+
+    assert chosen.model == "unrelated/model"
+
+
+def test_cheapest_snapshot_without_acceptable_models_only_considers_same_model() -> None:
+    snapshots = [
+        PriceSnapshot(model="expensive/model", provider="p1", prompt_price=0.0001, completion_price=0.0001,
+                      timestamp="2026-01-01T00:00:00+00:00"),
+        PriceSnapshot(model="cheap/model", provider="p2", prompt_price=0.000001, completion_price=0.000001,
+                      timestamp="2026-01-01T00:00:00+00:00"),
+    ]
+
+    chosen, _ = cheapest_snapshot_at_or_before(
+        snapshots, "expensive/model", "2026-06-01T00:00:00+00:00", prompt_tokens=100, completion_tokens=100
+    )
+
+    assert chosen.model == "expensive/model"

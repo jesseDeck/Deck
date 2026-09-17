@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from openrouter_savings.openrouter_client import parse_endpoint
+from openrouter_savings.openrouter_client import parse_catalog_pricing, parse_endpoint
 
 
 def test_parse_endpoint_reads_known_field_names() -> None:
@@ -30,3 +30,16 @@ def test_parse_endpoint_falls_back_across_alternate_keys() -> None:
     endpoint = parse_endpoint(raw)
     assert endpoint.provider == "together"
     assert endpoint.uptime_pct == 95.0
+
+
+def test_parse_catalog_pricing_reads_top_level_model_pricing() -> None:
+    raw_model = {"id": "openai/gpt-4o", "pricing": {"prompt": "0.0000025", "completion": "0.00001"}}
+    prompt_price, completion_price = parse_catalog_pricing(raw_model)
+    assert prompt_price == 0.0000025
+    assert completion_price == 0.00001
+
+
+def test_parse_catalog_pricing_handles_missing_pricing() -> None:
+    prompt_price, completion_price = parse_catalog_pricing({"id": "some/model"})
+    assert prompt_price is None
+    assert completion_price is None

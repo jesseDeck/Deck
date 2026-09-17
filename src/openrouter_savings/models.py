@@ -31,6 +31,12 @@ class UsageEntry:
     actual_cost: float | None = None  # $ actually paid; computed from unit prices if omitted
     notes: str = ""
     id: str = field(default_factory=new_id)
+    # Which models OpenRouter would have been allowed to route this usage to instead of
+    # ``model``. Empty + any_model_acceptable=False (the default) means "only compare
+    # providers of this same model" (the original behavior). ``model`` itself is always
+    # implicitly acceptable, so it doesn't need to be repeated in this list.
+    acceptable_models: list[str] = field(default_factory=list)
+    any_model_acceptable: bool = False  # True = compare against every model we have pricing for
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -45,6 +51,8 @@ class UsageEntry:
             "unit_completion_price": self.unit_completion_price,
             "actual_cost": self.actual_cost,
             "notes": self.notes,
+            "acceptable_models": self.acceptable_models,
+            "any_model_acceptable": self.any_model_acceptable,
         }
 
     @classmethod
@@ -61,6 +69,8 @@ class UsageEntry:
             unit_completion_price=data.get("unit_completion_price"),
             actual_cost=data.get("actual_cost"),
             notes=data.get("notes", ""),
+            acceptable_models=list(data.get("acceptable_models") or []),
+            any_model_acceptable=bool(data.get("any_model_acceptable", False)),
         )
 
 
@@ -176,3 +186,65 @@ class TrackedModel:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TrackedModel":
         return cls(model=data["model"], label=data.get("label", ""))
+
+
+@dataclass
+class ModelProfile:
+    """A model you use regularly, described as a usage *rate* rather than a log.
+
+    Instead of logging every request, you describe how long you've been using
+    ``model`` and roughly how much per month, plus which other models
+    OpenRouter would have been allowed to substitute in. ``profiles.py``
+    expands this into one synthetic monthly ``UsageEntry`` per calendar month
+    in the usage window, which then flows through the same savings math as
+    manually-logged usage.
+    """
+
+    model: str
+    used_since: str  # ISO 8601 date; start of the usage window
+    id: str = field(default_factory=new_id)
+    label: str = ""
+    provider_used: str = ""
+    used_until: str | None = None  # None means "ongoing" (through today)
+    monthly_prompt_tokens: float = 0
+    monthly_completion_tokens: float = 0
+    monthly_cost: float | None = None  # $ actually paid per month; derived from unit prices if omitted
+    unit_prompt_price: float | None = None
+    unit_completion_price: float | None = None
+    acceptable_models: list[str] = field(default_factory=list)
+    any_model_acceptable: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "model": self.model,
+            "label": self.label,
+            "provider_used": self.provider_used,
+            "used_since": self.used_since,
+            "used_until": self.used_until,
+            "monthly_prompt_tokens": self.monthly_prompt_tokens,
+            "monthly_completion_tokens": self.monthly_completion_tokens,
+            "monthly_cost": self.monthly_cost,
+            "unit_prompt_price": self.unit_prompt_price,
+            "unit_completion_price": self.unit_completion_price,
+            "acceptable_models": self.acceptable_models,
+            "any_model_acceptable": self.any_model_acceptable,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ModelProfile":
+        return cls(
+            id=data.get("id") or new_id(),
+            model=data["model"],
+            label=data.get("label", ""),
+            provider_used=data.get("provider_used", ""),
+            used_since=data["used_since"],
+            used_until=data.get("used_until"),
+            monthly_prompt_tokens=float(data.get("monthly_prompt_tokens", 0)),
+            monthly_completion_tokens=float(data.get("monthly_completion_tokens", 0)),
+            monthly_cost=data.get("monthly_cost"),
+            unit_prompt_price=data.get("unit_prompt_price"),
+            unit_completion_price=data.get("unit_completion_price"),
+            acceptable_models=list(data.get("acceptable_models") or []),
+            any_model_acceptable=bool(data.get("any_model_acceptable", False)),
+        )

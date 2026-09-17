@@ -17,8 +17,9 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .csv_import import CsvImportError, parse_downtime_incidents_csv_text, parse_price_history_csv_text
-from .models import TrackedModel, UsageEntry
+from .models import ModelProfile, TrackedModel, UsageEntry
 from .openrouter_client import OpenRouterClient
+from .profiles import profiles_to_usage_entries
 from .savings import compute_savings
 from .snapshot_job import take_snapshot
 from .storage import Store
@@ -132,6 +133,48 @@ def _run_snapshot(ctx: RequestContext) -> Any:
     return take_snapshot(ctx.store, ctx.client)
 
 
+def _list_profiles(ctx: RequestContext) -> Any:
+    return [p.to_dict() for p in ctx.store.model_profiles.all()]
+
+
+def _add_profile(ctx: RequestContext) -> Any:
+    payload = ctx.json_body()
+    for field_name in ("model", "used_since"):
+        if not payload.get(field_name):
+            raise ApiError(400, f"'{field_name}' is required")
+    profile = ModelProfile.from_dict(payload)
+    ctx.store.model_profiles.append(profile)
+
+    # Auto-track the model itself and any named substitutes, so per-provider
+    # snapshotting (not just the broad catalog snapshot) covers them too.
+    tracked = {t.model for t in ctx.store.tracked_models.all()}
+    to_add = {profile.model, *profile.acceptable_models} - tracked
+    for model in to_add:
+        ctx.store.tracked_models.append(TrackedModel(model=model))
+
+    # Fetch pricing immediately rather than waiting for a manual "Snapshot now" or
+    # the next background poll: otherwise the profile report would silently show
+    # "no savings" for this profile until pricing happens to get polled later,
+    # which defeats the point of adding a profile in the first place.
+    take_snapshot(ctx.store, ctx.client)
+
+    return profile.to_dict()
+
+
+def _delete_profile(ctx: RequestContext) -> Any:
+    removed = ctx.store.model_profiles.remove_by_id(ctx.path_params["profile_id"])
+    if not removed:
+        raise ApiError(404, "profile not found")
+    return {"removed": True}
+
+
+def _get_profiles_report(ctx: RequestContext) -> Any:
+    live_client = ctx.client if ctx.query_flag("allow_live_fallback", default=True) else None
+    entries = profiles_to_usage_entries(ctx.store.model_profiles.all())
+    report = compute_savings(entries, ctx.store.price_snapshots.all(), live_client=live_client)
+    return report.to_dict()
+
+
 def _get_report(ctx: RequestContext) -> Any:
     live_client = ctx.client if ctx.query_flag("allow_live_fallback", default=True) else None
     report = compute_savings(ctx.store.usage.all(), ctx.store.price_snapshots.all(), live_client=live_client)
@@ -187,6 +230,10 @@ ROUTES = [
     Route("DELETE", "/api/tracked/{model}", _delete_tracked),
     Route("POST", "/api/snapshot", _run_snapshot),
     Route("GET", "/api/report", _get_report),
+    Route("GET", "/api/profiles", _list_profiles),
+    Route("POST", "/api/profiles", _add_profile),
+    Route("DELETE", "/api/profiles/{profile_id}", _delete_profile),
+    Route("GET", "/api/profiles/report", _get_profiles_report),
     Route("GET", "/api/uptime", _get_uptime),
     Route("GET", "/api/models", _search_models),
     Route("POST", "/api/import-price-history", _import_price_history),
