@@ -103,7 +103,7 @@
         <thead>
           <tr>
             <th>Model</th><th>Provider</th><th>Latest uptime</th><th>Avg uptime</th>
-            <th>Est. downtime</th><th>Tracked over</th>
+            <th>Est. downtime (polled)</th><th>Logged incidents</th><th>Tracked over</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -115,7 +115,7 @@
       <p class="muted">
         Paste CSV rows with header <code>model,provider,prompt_price,completion_price,effective_date</code>
         (USD per token, ISO date). Useful for prices from before you started tracking, e.g. exported from a
-        community OpenRouter price-history dataset.
+        pricing-history site such as <a href="https://benchlm.ai/llm-pricing-trends" target="_blank" rel="noopener">BenchLM.ai</a>.
       </p>
       <form class="inline" id="import-form">
         <textarea name="csv" rows="4" style="width:100%;" placeholder="model,provider,prompt_price,completion_price,effective_date
@@ -123,6 +123,23 @@ openai/gpt-4o,azure,0.0000025,0.00001,2026-01-01"></textarea>
       </form>
       <button type="submit" form="import-form">Import</button>
       <span class="muted" id="import-result"></span>
+    </section>
+
+    <section class="card">
+      <h2>Backfill historical downtime (optional)</h2>
+      <p class="muted">
+        Paste CSV rows with header <code>model,provider,start,end</code> (ISO datetimes, plus an optional
+        <code>notes</code> column) for known outage windows. Useful for outages from before you started
+        tracking, e.g. exported from an incident-monitoring site such as
+        <a href="https://www.isitdown.ai/" target="_blank" rel="noopener">IsItDown.ai</a>. Shown separately
+        from polled uptime % below, since the two can overlap.
+      </p>
+      <form class="inline" id="import-downtime-form">
+        <textarea name="csv" rows="4" style="width:100%;" placeholder="model,provider,start,end,notes
+openai/gpt-4o,openai,2026-03-04T10:00:00+00:00,2026-03-04T11:30:00+00:00,partial outage"></textarea>
+      </form>
+      <button type="submit" form="import-downtime-form">Import</button>
+      <span class="muted" id="import-downtime-result"></span>
     </section>
   </main>
 

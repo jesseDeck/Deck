@@ -206,9 +206,22 @@ tracks per-provider uptime.
 price-change or downtime logs (that view lives behind login at
 [openrouter.ai/workspaces](https://openrouter.ai/workspaces)). So this tool
 builds its own history going forward, by polling OpenRouter each time you run
-`snapshot` (or run `serve --poll-interval-minutes`). You can backfill prices
-from before you started tracking by importing a CSV (see below) -- for
-example built from a community-maintained OpenRouter price-history dataset.
+`snapshot` (or run `serve --poll-interval-minutes`). You can backfill data
+from before you started tracking via the two CSV importers below.
+
+Two sites can be useful sources to backfill from (neither was reachable from
+the sandbox this was built in, so their exact API schemas weren't verified --
+these are generic CSV importers rather than direct API integrations, so they
+work regardless of the source's format):
+
+- **[BenchLM.ai](https://benchlm.ai/llm-pricing-trends)** -- tracks dated
+  pricing changes across ~165 models going back to GPT-4's March 2023 launch,
+  and reportedly offers a free JSON/CSV API. Reshape its history/ledger rows
+  into the price-history CSV format below.
+- **[IsItDown.ai](https://www.isitdown.ai/)** -- tracks real-time status and
+  incident history for ChatGPT, Claude, and Gemini (a subset of possible
+  providers), and reportedly offers a data-export API. Reshape its incident
+  log into the downtime-history CSV format below.
 
 ### Run it
 
@@ -223,7 +236,7 @@ Then open <http://127.0.0.1:8787>. From there you can:
   `--poll-interval-minutes` to `serve` to poll automatically in the background)
 - See total savings, a per-model/provider breakdown, a spend-over-time chart,
   and per-provider uptime/estimated downtime
-- Backfill historical prices by pasting a CSV
+- Backfill historical prices or discrete outage windows by pasting a CSV
 
 All data is stored locally as JSON under `.openrouter_savings/` (override with
 `--data-dir`). Nothing is sent anywhere except to OpenRouter's public,
@@ -236,10 +249,14 @@ python -m openrouter_savings snapshot                    # poll tracked models o
 python -m openrouter_savings report                      # print the savings report as JSON
 python -m openrouter_savings uptime                      # print the uptime/downtime summary as JSON
 python -m openrouter_savings import-price-history prices.csv
+python -m openrouter_savings import-downtime-history outages.csv
 ```
 
-The import CSV needs a header of `model,provider,prompt_price,completion_price,effective_date`
-(USD per token, ISO 8601 date).
+- The price-history CSV needs a header of `model,provider,prompt_price,completion_price,effective_date`
+  (USD per token, ISO 8601 date).
+- The downtime-history CSV needs a header of `model,provider,start,end` (ISO 8601 datetimes), plus an
+  optional `notes` column, for known discrete outage windows. These are reported separately from the
+  uptime-percentage-derived downtime estimate (see below), since the two can overlap in time.
 
 ### Tests
 

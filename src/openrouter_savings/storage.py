@@ -12,7 +12,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Callable, Generic, TypeVar
 
-from .models import PriceSnapshot, TrackedModel, UsageEntry, UptimeSnapshot
+from .models import DowntimeIncident, PriceSnapshot, TrackedModel, UsageEntry, UptimeSnapshot
 
 T = TypeVar("T")
 
@@ -82,4 +82,7 @@ class Store:
         )
         self.tracked_models = JsonListStore[TrackedModel](
             self.data_dir / "tracked_models.json", TrackedModel.to_dict, TrackedModel.from_dict
+        )
+        self.downtime_incidents = JsonListStore[DowntimeIncident](
+            self.data_dir / "downtime_incidents.json", DowntimeIncident.to_dict, DowntimeIncident.from_dict
         )

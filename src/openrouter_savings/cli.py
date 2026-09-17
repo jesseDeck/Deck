@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .csv_import import CsvImportError, parse_price_history_csv
+from .csv_import import CsvImportError, parse_downtime_incidents_csv, parse_price_history_csv
 from .openrouter_client import OpenRouterClient
 from .savings import compute_savings
 from .server import serve
@@ -56,6 +56,11 @@ def _build_parser() -> argparse.ArgumentParser:
     import_cmd = sub.add_parser("import-price-history", help="Backfill historical prices from a CSV file")
     import_cmd.add_argument("csv_path")
 
+    import_downtime_cmd = sub.add_parser(
+        "import-downtime-history", help="Backfill historical outage windows from a CSV file"
+    )
+    import_downtime_cmd.add_argument("csv_path")
+
     return parser
 
 
@@ -89,7 +94,7 @@ def main() -> int:
         return 0
 
     if args.command == "uptime":
-        summaries = summarize_uptime(store.uptime_snapshots.all())
+        summaries = summarize_uptime(store.uptime_snapshots.all(), store.downtime_incidents.all())
         _print([s.to_dict() for s in summaries])
         return 0
 
@@ -101,6 +106,16 @@ def main() -> int:
             return 2
         store.price_snapshots.replace_all(store.price_snapshots.all() + snapshots)
         _print({"imported": len(snapshots)})
+        return 0
+
+    if args.command == "import-downtime-history":
+        try:
+            incidents = parse_downtime_incidents_csv(Path(args.csv_path))
+        except CsvImportError as exc:
+            parser.error(str(exc))
+            return 2
+        store.downtime_incidents.replace_all(store.downtime_incidents.all() + incidents)
+        _print({"imported": len(incidents)})
         return 0
 
     parser.error("Unknown command")

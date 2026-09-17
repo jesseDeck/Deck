@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from openrouter_savings.csv_import import CsvImportError, parse_price_history_csv_text
-from openrouter_savings.models import UsageEntry
+from openrouter_savings.models import DowntimeIncident, UsageEntry
 from openrouter_savings.storage import Store
 
 
@@ -38,6 +38,20 @@ def test_store_remove_by_id(tmp_path: Path) -> None:
     assert store.usage.remove_by_id(entry.id) is True
     assert store.usage.all() == []
     assert store.usage.remove_by_id("missing") is False
+
+
+def test_store_round_trips_downtime_incidents(tmp_path: Path) -> None:
+    store = Store(tmp_path / "data")
+    incident = DowntimeIncident(
+        model="openai/gpt-4o", provider="openai", start="2026-01-01T00:00:00+00:00",
+        end="2026-01-01T01:00:00+00:00", notes="outage",
+    )
+    store.downtime_incidents.append(incident)
+
+    reloaded = Store(tmp_path / "data")
+    all_incidents = reloaded.downtime_incidents.all()
+    assert len(all_incidents) == 1
+    assert all_incidents[0].notes == "outage"
 
 
 def test_parse_price_history_csv_text() -> None:

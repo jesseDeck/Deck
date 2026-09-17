@@ -125,6 +125,45 @@ class UptimeSnapshot:
 
 
 @dataclass
+class DowntimeIncident:
+    """A discrete outage window backfilled from an external source.
+
+    Unlike ``UptimeSnapshot`` (a point-in-time percentage this tool polled
+    itself), this represents a known start/end outage window imported from
+    elsewhere -- e.g. a status-monitoring site's incident history -- so it can
+    cover time before you started tracking.
+    """
+
+    model: str
+    provider: str
+    start: str  # ISO 8601
+    end: str  # ISO 8601
+    source: str = "import"
+    notes: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "provider": self.provider,
+            "start": self.start,
+            "end": self.end,
+            "source": self.source,
+            "notes": self.notes,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DowntimeIncident":
+        return cls(
+            model=data["model"],
+            provider=data["provider"],
+            start=data["start"],
+            end=data["end"],
+            source=data.get("source", "import"),
+            notes=data.get("notes", ""),
+        )
+
+
+@dataclass
 class TrackedModel:
     """A model you've asked this tool to keep polling OpenRouter for."""
 

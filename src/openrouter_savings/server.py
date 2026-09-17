@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .csv_import import CsvImportError, parse_price_history_csv_text
+from .csv_import import CsvImportError, parse_downtime_incidents_csv_text, parse_price_history_csv_text
 from .models import TrackedModel, UsageEntry
 from .openrouter_client import OpenRouterClient
 from .savings import compute_savings
@@ -139,7 +139,7 @@ def _get_report(ctx: RequestContext) -> Any:
 
 
 def _get_uptime(ctx: RequestContext) -> Any:
-    summaries = summarize_uptime(ctx.store.uptime_snapshots.all())
+    summaries = summarize_uptime(ctx.store.uptime_snapshots.all(), ctx.store.downtime_incidents.all())
     return [s.to_dict() for s in summaries]
 
 
@@ -167,6 +167,17 @@ def _import_price_history(ctx: RequestContext) -> Any:
     return {"imported": len(snapshots)}
 
 
+def _import_downtime_history(ctx: RequestContext) -> Any:
+    text = ctx.raw_body().decode("utf-8", errors="replace")
+    try:
+        incidents = parse_downtime_incidents_csv_text(text)
+    except CsvImportError as exc:
+        raise ApiError(400, str(exc)) from exc
+    existing = ctx.store.downtime_incidents.all()
+    ctx.store.downtime_incidents.replace_all(existing + incidents)
+    return {"imported": len(incidents)}
+
+
 ROUTES = [
     Route("GET", "/api/usage", _list_usage),
     Route("POST", "/api/usage", _add_usage),
@@ -179,6 +190,7 @@ ROUTES = [
     Route("GET", "/api/uptime", _get_uptime),
     Route("GET", "/api/models", _search_models),
     Route("POST", "/api/import-price-history", _import_price_history),
+    Route("POST", "/api/import-downtime-history", _import_downtime_history),
 ]
 
 

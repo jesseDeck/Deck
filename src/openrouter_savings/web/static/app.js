@@ -193,6 +193,11 @@ async function refreshUptime() {
         <td>${fmtPct(s.latest_uptime_pct)}</td>
         <td>${fmtPct(s.average_uptime_pct)}</td>
         <td>${fmtMinutes(s.estimated_downtime_minutes)}</td>
+        <td>${
+          s.logged_incidents.length
+            ? `${fmtMinutes(s.logged_incident_minutes)} (${s.logged_incidents.length})`
+            : "—"
+        }</td>
         <td>${fmtMinutes(s.tracked_minutes)}</td>
       </tr>`
     )
@@ -252,6 +257,19 @@ $("#import-form").addEventListener("submit", async (evt) => {
     const result = await api("POST", "/api/import-price-history", csv);
     resultEl.textContent = `Imported ${result.imported} price rows.`;
     await refreshReport();
+  } catch (err) {
+    resultEl.textContent = `Error: ${err.message}`;
+  }
+});
+
+$("#import-downtime-form").addEventListener("submit", async (evt) => {
+  evt.preventDefault();
+  const csv = new FormData(evt.target).get("csv");
+  const resultEl = $("#import-downtime-result");
+  try {
+    const result = await api("POST", "/api/import-downtime-history", csv);
+    resultEl.textContent = `Imported ${result.imported} incident rows.`;
+    await refreshUptime();
   } catch (err) {
     resultEl.textContent = `Error: ${err.message}`;
   }
