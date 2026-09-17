@@ -189,6 +189,64 @@ Each task run is configured to return a broker-agnostic policy shape:
   - `broker_reference`
   - `documents[]`
 
+## OpenRouter savings & downtime calculator
+
+A separate, unrelated tool also lives in this repo: `openrouter_savings`, a local
+web app for figuring out how much you could save by routing through
+[OpenRouter](https://openrouter.ai) instead of calling model providers directly,
+and for tracking each provider's uptime over time.
+
+You log what you actually paid a provider directly (model, provider, tokens,
+cost) and tell it which models to track. It compares your real spend against
+the cheapest OpenRouter-served provider for that same model, and separately
+tracks per-provider uptime.
+
+**Data limitation to know up front:** OpenRouter's public API only reports
+*current* pricing and uptime -- there's no public API for historical
+price-change or downtime logs (that view lives behind login at
+[openrouter.ai/workspaces](https://openrouter.ai/workspaces)). So this tool
+builds its own history going forward, by polling OpenRouter each time you run
+`snapshot` (or run `serve --poll-interval-minutes`). You can backfill prices
+from before you started tracking by importing a CSV (see below) -- for
+example built from a community-maintained OpenRouter price-history dataset.
+
+### Run it
+
+```bash
+python -m openrouter_savings serve
+```
+
+Then open <http://127.0.0.1:8787>. From there you can:
+
+- Add usage entries (model, provider you actually used, tokens, cost)
+- Track models so their price/uptime get polled ("Snapshot now", or pass
+  `--poll-interval-minutes` to `serve` to poll automatically in the background)
+- See total savings, a per-model/provider breakdown, a spend-over-time chart,
+  and per-provider uptime/estimated downtime
+- Backfill historical prices by pasting a CSV
+
+All data is stored locally as JSON under `.openrouter_savings/` (override with
+`--data-dir`). Nothing is sent anywhere except to OpenRouter's public,
+unauthenticated catalog API.
+
+### CLI
+
+```bash
+python -m openrouter_savings snapshot                    # poll tracked models once
+python -m openrouter_savings report                      # print the savings report as JSON
+python -m openrouter_savings uptime                      # print the uptime/downtime summary as JSON
+python -m openrouter_savings import-price-history prices.csv
+```
+
+The import CSV needs a header of `model,provider,prompt_price,completion_price,effective_date`
+(USD per token, ISO 8601 date).
+
+### Tests
+
+```bash
+pytest -q tests/test_openrouter_*.py
+```
+
 ## Security and compliance notes
 
 - Only run this against systems and client records where you have explicit authorization.
