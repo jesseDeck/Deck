@@ -189,6 +189,101 @@ Each task run is configured to return a broker-agnostic policy shape:
   - `broker_reference`
   - `documents[]`
 
+## OpenRouter savings & downtime calculator
+
+A separate, unrelated tool also lives in this repo: `openrouter_savings`, a local
+web app for figuring out how much you could save by routing through
+[OpenRouter](https://openrouter.ai) instead of calling model providers directly,
+and for tracking each provider's uptime over time.
+
+There are two ways to describe your usage:
+
+- **Model usage profiles** (the quickest way in): pick a model from OpenRouter's
+  live catalog via search, say roughly how long and how much you've used it per
+  month, and choose which other models would have been acceptable to auto-route
+  to instead (specific substitutes, or "any available model" for full
+  auto-route). This projects your usage month by month and compares it against
+  the cheapest model+provider you were willing to use -- not just the cheapest
+  provider of the same model.
+- **Exact usage log entries**: log precisely what you paid a provider directly
+  (model, provider, tokens, cost, timestamp) for finer-grained history.
+
+Either way, it compares your real spend against the cheapest OpenRouter-served
+option, and separately tracks per-provider uptime.
+
+**Data limitation to know up front:** OpenRouter's public API only reports
+*current* pricing and uptime -- there's no public API for historical
+price-change or downtime logs (that view lives behind login at
+[openrouter.ai/workspaces](https://openrouter.ai/workspaces)). So this tool
+builds its own history going forward, by polling OpenRouter each time you run
+`snapshot` (or run `serve --poll-interval-minutes`). You can backfill data
+from before you started tracking via the two CSV importers below.
+
+Two sites can be useful sources to backfill from (neither was reachable from
+the sandbox this was built in, so their exact API schemas weren't verified --
+these are generic CSV importers rather than direct API integrations, so they
+work regardless of the source's format):
+
+- **[BenchLM.ai](https://benchlm.ai/llm-pricing-trends)** -- tracks dated
+  pricing changes across ~165 models going back to GPT-4's March 2023 launch,
+  and reportedly offers a free JSON/CSV API. Reshape its history/ledger rows
+  into the price-history CSV format below.
+- **[IsItDown.ai](https://www.isitdown.ai/)** -- tracks real-time status and
+  incident history for ChatGPT, Claude, and Gemini (a subset of possible
+  providers), and reportedly offers a data-export API. Reshape its incident
+  log into the downtime-history CSV format below.
+
+### Run it
+
+```bash
+python -m openrouter_savings serve
+```
+
+Then open <http://127.0.0.1:8787>. From there you can:
+
+- Add a model usage profile: search OpenRouter's catalog for a model you use,
+  describe your usage window and monthly volume, and pick acceptable
+  substitute models (or "any available model"). Adding one immediately fetches
+  pricing for it -- no separate step needed.
+- Add exact usage entries (model, provider you actually used, tokens, cost)
+- Track models so their price/uptime get polled ("Snapshot now", or pass
+  `--poll-interval-minutes` to `serve` to poll automatically in the background)
+- See total savings, a per-model/provider breakdown, a spend-over-time chart,
+  and per-provider uptime/estimated downtime
+- Backfill historical prices or discrete outage windows by pasting a CSV
+
+Model usage profiles report which model+provider it would have routed each
+month to (shown as "switched" when that differs from the model you actually
+used), so cross-model routing decisions stay visible rather than a single
+opaque total.
+
+All data is stored locally as JSON under `.openrouter_savings/` (override with
+`--data-dir`). Nothing is sent anywhere except to OpenRouter's public,
+unauthenticated catalog API.
+
+### CLI
+
+```bash
+python -m openrouter_savings snapshot                    # poll tracked models once
+python -m openrouter_savings report                      # print the savings report as JSON
+python -m openrouter_savings profiles-report              # print the model-usage-profiles savings report as JSON
+python -m openrouter_savings uptime                      # print the uptime/downtime summary as JSON
+python -m openrouter_savings import-price-history prices.csv
+python -m openrouter_savings import-downtime-history outages.csv
+```
+
+- The price-history CSV needs a header of `model,provider,prompt_price,completion_price,effective_date`
+  (USD per token, ISO 8601 date).
+- The downtime-history CSV needs a header of `model,provider,start,end` (ISO 8601 datetimes), plus an
+  optional `notes` column, for known discrete outage windows. These are reported separately from the
+  uptime-percentage-derived downtime estimate (see below), since the two can overlap in time.
+
+### Tests
+
+```bash
+pytest -q tests/test_openrouter_*.py
+```
+
 ## Security and compliance notes
 
 - Only run this against systems and client records where you have explicit authorization.

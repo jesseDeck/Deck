@@ -2,5 +2,6 @@
 __pycache__/
 .pytest_cache/
 .deck/
+.openrouter_savings/
 *.pyc
 *.egg-info/
