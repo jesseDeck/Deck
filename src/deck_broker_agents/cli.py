@@ -7,6 +7,7 @@ import json
 import os
 from typing import Any
 
+from .claims_agents import ClaimsAgentManager
 from .deck_client import DeckClient
 from .policy_agents import PolicyAgentManager
 from .pricing_agents import PricingAgentManager
@@ -33,6 +34,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--pricing-registry-path",
         default=".deck/pricing_agents.json",
         help="Path where pricing Deck resource IDs are stored.",
+    )
+    parser.add_argument(
+        "--claims-registry-path",
+        default=".deck/claims_agents.json",
+        help="Path where claims Deck resource IDs are stored.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -111,6 +117,39 @@ def _build_parser() -> argparse.ArgumentParser:
     pricing_run.add_argument("--poll-seconds", type=int, default=5)
     pricing_run.add_argument("--timeout-seconds", type=int, default=600)
 
+    claims_bootstrap = sub.add_parser("claims-bootstrap", help="Create source/agent/task records for claims portals")
+    claims_bootstrap.add_argument(
+        "--portals",
+        default=None,
+        help="Comma-separated claims portals to bootstrap (default: all).",
+    )
+    claims_bootstrap.add_argument(
+        "--source-override",
+        action="append",
+        help="Optional source override in form portal=url",
+    )
+
+    claims_create_cred = sub.add_parser("claims-create-credential", help="Store portal login in Deck vault")
+    claims_create_cred.add_argument("--portal", required=True)
+    claims_create_cred.add_argument("--external-id", required=True)
+    claims_create_cred.add_argument("--username", required=True)
+    claims_create_cred.add_argument("--password", required=True)
+
+    claims_run = sub.add_parser("claims-run", help="Run claims extraction task")
+    claims_run.add_argument("--portal", required=True)
+    claims_run.add_argument("--credential-id", required=True)
+    claims_run.add_argument("--service-date-from")
+    claims_run.add_argument("--service-date-to")
+    claims_run.add_argument("--member-name")
+    claims_run.add_argument("--claim-status", action="append")
+    claims_run.add_argument("--max-claims", type=int, default=200)
+    claims_run.add_argument("--no-eobs", action="store_true", help="Skip downloading EOB/statement PDFs.")
+    claims_run.add_argument("--session-id")
+    claims_run.add_argument("--idempotency-key")
+    claims_run.add_argument("--wait", action="store_true", help="Poll run until terminal state.")
+    claims_run.add_argument("--poll-seconds", type=int, default=5)
+    claims_run.add_argument("--timeout-seconds", type=int, default=900)
+
     return parser
 
 
@@ -126,6 +165,13 @@ def _build_pricing_manager(registry_path: str) -> PricingAgentManager:
     base_url = os.getenv("DECK_BASE_URL", "https://api.deck.co/v2")
     client = DeckClient(api_key=api_key, base_url=base_url)
     return PricingAgentManager(client=client, registry_path=registry_path)
+
+
+def _build_claims_manager(registry_path: str) -> ClaimsAgentManager:
+    api_key = os.getenv("DECK_API_KEY", "")
+    base_url = os.getenv("DECK_BASE_URL", "https://api.deck.co/v2")
+    client = DeckClient(api_key=api_key, base_url=base_url)
+    return ClaimsAgentManager(client=client, registry_path=registry_path)
 
 
 def _print(payload: Any) -> None:
@@ -223,6 +269,50 @@ def main() -> int:
             search_terms=args.search_term,
             max_products_per_category=args.max_products_per_category,
             include_out_of_stock=args.include_out_of_stock,
+            session_id=args.session_id,
+            idempotency_key=args.idempotency_key,
+        )
+        if args.wait:
+            terminal = manager.wait_for_terminal_status(
+                run["id"],
+                poll_seconds=args.poll_seconds,
+                timeout_seconds=args.timeout_seconds,
+            )
+            _print(terminal)
+            return 0
+        _print(run)
+        return 0
+
+    if args.command == "claims-bootstrap":
+        manager = _build_claims_manager(args.claims_registry_path)
+        portals = [part.strip().lower() for part in args.portals.split(",") if part.strip()] if args.portals else None
+        overrides = _parse_source_overrides(args.source_override)
+        registry = manager.bootstrap_many(portals, source_url_overrides=overrides)
+        _print({k: vars(v) for k, v in registry.items()})
+        return 0
+
+    if args.command == "claims-create-credential":
+        manager = _build_claims_manager(args.claims_registry_path)
+        credential = manager.create_user_credential(
+            portal=args.portal,
+            external_id=args.external_id,
+            username=args.username,
+            password=args.password,
+        )
+        _print(credential)
+        return 0
+
+    if args.command == "claims-run":
+        manager = _build_claims_manager(args.claims_registry_path)
+        run = manager.run_claims_extraction(
+            portal=args.portal,
+            credential_id=args.credential_id,
+            service_date_from=args.service_date_from,
+            service_date_to=args.service_date_to,
+            member_name=args.member_name,
+            claim_statuses=args.claim_status,
+            max_claims=args.max_claims,
+            download_eobs=not args.no_eobs,
             session_id=args.session_id,
             idempotency_key=args.idempotency_key,
         )

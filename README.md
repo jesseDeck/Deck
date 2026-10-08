@@ -4,6 +4,7 @@ This repository provides a Python toolkit that provisions and runs [Deck](https:
 
 1. **Client policy extraction** from UK/London broker systems
 2. **Retail product pricing extraction** from e-commerce catalogs (including Ferguson faucets/sinks)
+3. **Healthcare claims extraction** from US payer member portals and patient portals
 
 ## Included policy connectors
 
@@ -169,6 +170,65 @@ Each pricing run is configured to return:
   - `availability`
   - `product_url`
 - `retrieved_at`
+
+## Healthcare claims agents
+
+One agent per portal retrieves every claim (or billing statement, on provider portals) with billed amount,
+claim ID, status, claim type, plan, plan paid amount, provider, service date, and patient/member
+responsibility (with deductible / copay / coinsurance / not-covered breakdown when shown). EOB and
+statement PDFs are captured to Deck storage with document extraction.
+
+| Portal key | Source | Type | Default URL |
+|---|---|---|---|
+| `cigna` | Cigna | payer | https://my.cigna.com/ |
+| `aetna` | Aetna | payer | https://health.aetna.com/ |
+| `uhc` | UnitedHealthcare (myUHC) | payer | https://www.myuhc.com/ |
+| `elevance` | Elevance Health (Anthem) | payer | https://www.anthem.com/login/ |
+| `hcsc` | HCSC Blue Access for Members | payer | https://www.bcbsil.com/ (per state) |
+| `highmark` | Highmark | payer | https://www.highmark.com/ |
+| `mychart` | MyChart (Epic) | provider | https://www.mychart.org/ (per health system) |
+| `athena` | athenaPatient | provider | https://myhealth.athenahealth.com/ |
+| `mypatientportal` | MyPatientPortal | provider | https://www.mypatientportal.com/ (per practice) |
+| `eclinicalworks` | eClinicalWorks (healow) | provider | https://healow.com/ (per practice) |
+
+### 1) Bootstrap claims portals
+
+```bash
+python -m deck_broker_agents claims-bootstrap                     # all ten
+python -m deck_broker_agents claims-bootstrap --portals cigna,uhc
+```
+
+IDs are written to `.deck/claims_agents.json`. Re-running skips portals already in the registry, so it
+will not create duplicates. Per-organization portals (HCSC state plans, MyChart, MyPatientPortal,
+eClinicalWorks) can be pointed at a specific login page; passing an override re-provisions that portal:
+
+```bash
+python -m deck_broker_agents claims-bootstrap --portals mychart \
+  --source-override mychart=https://mychart.example-health.org/
+```
+
+### 2) Store the member's portal login
+
+```bash
+python -m deck_broker_agents claims-create-credential \
+  --portal cigna --external-id member_123 \
+  --username member@example.com --password "..."
+```
+
+### 3) Run claims extraction
+
+```bash
+python -m deck_broker_agents claims-run \
+  --portal cigna --credential-id cred_abc123 \
+  --service-date-from 2026-01-01 --service-date-to 2026-09-30 \
+  --wait
+```
+
+Optional: `--member-name` (single dependent), `--claim-status` (repeatable), `--max-claims`, `--no-eobs`.
+MFA prompts surface as `interaction_required`; answer them with `submit-interaction`.
+
+Claims data is PHI. Only run these agents with the member's authorization, and handle outputs under
+your HIPAA obligations.
 
 ## Normalized extraction schema
 

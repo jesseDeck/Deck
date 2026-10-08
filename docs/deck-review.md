@@ -41,6 +41,8 @@ This implementation was based on these Deck docs pages:
      - `storage.extraction = true`
      - `storage.deduplication = true`
    - Storage list endpoint: `GET /task-runs/{run_id}/storage`
+   - `storage.extraction_schema` must not contain `additionalProperties` (Deck returns 422
+     `invalid_field_value`); task `input_schema`/`output_schema` accept it
 
 ## Prompting choices from task guidance
 
